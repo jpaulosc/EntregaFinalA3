@@ -3,11 +3,9 @@ import json
 from datetime import date
 from lib import console
 
-# Definindo ip e porta
 HOST = 'localhost'
 PORT = 5000
 
-# Criando o socket
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 enderecoServidor = (HOST, PORT)
 

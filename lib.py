@@ -1,27 +1,60 @@
+
+import random
 import socket
-import json
 import threading
-import os
 import sqlite3
+
+class helper():
+  def get_random_open_port():
+    result = None
+    while True:
+      port = random.randint(1024, 65535)  # Choose a random port number
+      with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+          s.bind(('localhost', port))
+          result = port
+          break 
+        except socket.error:
+          pass
+    return result
+
+class sender():
+	def __init__(self):
+		self.test = 1
+	def request(self):
+		return False
+	def response(self):
+		return False
+
+class receiver():
+  
+  LOGGED = False
+  PREFIX = False
+
+  def __init__(self):
+    self.test = 1
+    self.s = 1
+  def request(self):
+    return False
+  def response(self):
+    return False
 
 class database():
   def __init__(self, name:str):
     self.name = name
-    self.user = None
-    
+    self.thread_local = threading.local()
+
   def connect(self):
-    banco = sqlite3.connect(self.name, check_same_thread=False)
-    self.cursor = banco.cursor()
+    self.banco = sqlite3.connect(self.name, check_same_thread=False)
+    self.cursor = self.banco.cursor()
 
   # inserção em massa
   def bulk_insert(self):
     # tabela de usuarios
     self.cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (id integer PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'vendedor')")
-     # tabela de vendas
+    # tabela de vendas
     self.cursor.execute("CREATE TABLE IF NOT EXISTS vendas (id integer PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, loja TEXT NOT NULL, data text NOT NULL, valor float NOT NULL, FOREIGN KEY (user_id) REFERENCES usuarios(id))")
    
-    self.clear()
-
     # gerente Jess
     self.add_usuario('jess', '123', 'Jess', 'gerente')
     # vendedor Carl
@@ -33,31 +66,27 @@ class database():
     self.add_venda('americanas', '2023-05-09', 200, user_id)
     self.add_venda('bompreco', '2023-05-08', 600, user_id)
 
+    self.banco.commit()
+    
   # obter todos os usuarios
-  def login(self, username:str, password:str) -> bool:
-    consulta_sql = "SELECT id, name, role, username FROM usuarios WHERE username = ? AND password = ? LIMIT 1"
+  def login(self, username:str, password:str, host:str, port:str) -> bool:
+    consulta_sql = "SELECT id, name, role FROM usuarios WHERE username = ? AND password = ? LIMIT 1"
     self.cursor.execute(consulta_sql, (username,password))
-    resultado = self.cursor.fetchone()
-    if resultado is not None:
-      self.user = resultado
-    return resultado is not None
-  
-  def is_logado(self):
-    return self.user is not None
-  
+    return self.cursor.fetchone()
+
   def add_usuario(self, username:str, password:str, name:str, role:str = 'vendedor') -> int:
     self.cursor.execute(f"INSERT INTO usuarios (username, password, name, role) VALUES ('{username}', '{password}', '{name}', '{role}')")
     return self.cursor.lastrowid
   
+  def get_usuarios_logado(self):
+    self.cursor.execute("SELECT username, name, host, port FROM usuarios WHERE host IS NOT NULL AND port IS NOT NULL ORDER BY port")
+    users = self.cursor.fetchall()
+    return users
+  
   def add_venda(self, loja:str, data:str, valor:float, user_id:int = None):
-    user_id = self.user if user_id is None else user_id
+    user_id = self.user[0] if user_id is None else user_id
     self.cursor.execute(f"INSERT INTO vendas (user_id, loja, data, valor) VALUES ('{user_id}', '{loja}', '{data}', {valor})")
 
-  def get_userid(self, username:str):
-    self.cursor.execute("SELECT id FROM usuarios WHERE username = ?", (username,))
-    resultado = self.cursor.fetchone()
-    return resultado[0] if resultado is not None else None
-  
   # limpar tabela
   def clear(self):
     self.cursor.execute("DELETE FROM usuarios")
@@ -76,25 +105,21 @@ class database():
     return self.cursor.fetchone() is not None
   
   # verificar se vendedor existe
-  def has_vendedor(self, id:int|str) -> bool:
-    if isinstance(id, int):
-      consulta_sql = "SELECT 1 FROM usuarios WHERE id = ? AND role = 'vendedor' LIMIT 1"
-    elif isinstance(id, str):
-      consulta_sql = "SELECT 1 FROM usuarios WHERE username = ? AND role = 'vendedor' LIMIT 1"
-
-    self.cursor.execute(consulta_sql, (id,))
+  def has_vendedor(self, username:str) -> bool:
+    consulta_sql = "SELECT 1 FROM usuarios WHERE username = ? AND role = 'vendedor' LIMIT 1"
+    self.cursor.execute(consulta_sql, (username,))
     return self.cursor.fetchone() is not None
   
   # total de vendas de um vendedor
-  def get_total_vendas_vendedor(self,user_id:int):
+  def get_total_vendas_vendedor(self,username:str):
     #consulta_sql = "SELECT COUNT(*), SUM(valor) FROM vendas WHERE user_id = ?"
     self.cursor.execute("""
         SELECT usuarios.name, COUNT(vendas.id) AS total_vendas, SUM(vendas.valor) AS soma_vendas
         FROM usuarios
         LEFT JOIN vendas ON usuarios.id = vendas.user_id
-        WHERE usuarios.id = ?
+        WHERE usuarios.username = ?
         GROUP BY usuarios.name;
-    """, (user_id,))
+    """, (username,))
     return self.cursor.fetchone()
     
   # total de vendas da rede de lojas em um período
@@ -120,101 +145,9 @@ class database():
     consulta_sql = "SELECT loja, COUNT(*), SUM(valor) as total_vendas FROM vendas GROUP BY loja ORDER BY total_vendas DESC LIMIT 1"
     self.cursor.execute(consulta_sql)
     return self.cursor.fetchone()
-  
-class servidor():
-  def __init__(self, host:str, port:int, db:str):
-
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind((host, port))
-    server_socket.listen(5)
-    
-    print(f"Servidor iniciado. Aguardando conexões na porta {port}...")
-
-    self.server_socket = server_socket
-    self.db = db
-
-  # Função para lidar com a conexão de um cliente
-  def __handle_client(self, client_socket):
-
-    db = database(self.db)
-    db.connect()
-    db.bulk_insert()
-
-    while True:
-      data = client_socket.recv(1024).decode()
-      cod = 0
-
-      # Identifica o tipo de cliente
-      if data != None and data != '':
-        data = json.loads(data)
-        # código de operação
-        cod = int(data.get("code"))
-
-      match cod:
-        # total de vendas de um vendedor
-        case 1:
-          username = data.get("username")
-          if db.has_vendedor(username):
-            user_id = db.get_userid(username)
-            value = db.get_total_vendas_vendedor(user_id)
-            client_socket.send(f"O vendedor {value[0]} realizou no total {int(value[1])} venda(s), totalizando R$ {float(value[2])}".encode())
-          else: 
-            client_socket.send(f"O vendedor {username} não existe.".encode())
-        # total de vendas de uma loja
-        case 2:
-          nome = data.get("nome")
-          if db.has_loja(nome):
-            value = db.get_total_vendas_loja(nome)
-            client_socket.send(f"A loja {nome} teve no total {int(value[0])} venda(s), totalizando R$ {float(value[1])}".encode())
-          else: 
-            client_socket.send(f"A loja {nome} não existe.".encode())
-        # total de vendas da rede de lojas em um período
-        case 3:
-          min = data.get("min")
-          max = data.get("max")
-          value = db.get_total_vendas_periodo(data.get("min"), data.get("max"))
-          client_socket.send(f"O total de vendas da rede de lojas entre o periodo de {min} e {max} foi de {int(value[0])}, totalizando R$ {float(value[1])}".encode())
-        # melhor vendedor (aquele que tem o maior valor acumulado de vendas)
-        case 4:
-          value = db.get_melhor_vendedor()
-          client_socket.send(f"O melhor vendedor foi {value[0]} com o total de {int(value[1])} venda(s), totalizando R$ {float(value[2])}".encode())
-        # melhor loja (aquela que tem o maior valor acumulado de vendas)
-        case 5:
-          value = db.get_melhor_loja()
-          client_socket.send(f"A melhor loja foi {value[0]} com o total de {int(value[1])} venda(s), totalizando R$ {float(value[2])}".encode())
-        case 6:
-          db.add_venda(data.get("loja"), data.get("data"), data.get("valor"))
-          client_socket.send("Dados inseridos com sucesso!".encode())
-        case 7:
-          check = db.login(data.get("username"), data.get("password"))
-          if check:
-            client_socket.send(json.dumps(db.user).encode())
-          else:
-            client_socket.send("0".encode())
-        case _:
-          print('Fechando a conexao')
-          client_socket.send("Conexão encerrada.".encode())
-          client_socket.close()
-          # remover todos os dados inseridos
-          db.clear()
-          os._exit(1)
-      
-  # Função para lidar com as conexões de clientes
-  def __handle_connections(self):
-    while True:
-      # Aguarda a conexão de um cliente
-      client_socket, addr = self.server_socket.accept()
-      print(f"Nova conexão estabelecida em: {addr}")
-          
-      # Inicia uma nova thread para lidar com o cliente
-      client_thread = threading.Thread(target=self.__handle_client, args=(client_socket,))
-      client_thread.start()
-
-  def iniciar(self):
-    connections_thread = threading.Thread(target=self.__handle_connections)
-    connections_thread.start()
-
+ 
 class console():
+
   OKBLUE = '\033[94m'
   OKCYAN = '\033[96m'
   OKGREEN = '\033[92m'
@@ -223,6 +156,29 @@ class console():
   ENDC = '\033[0m'
   BOLD = '\033[1m'
   UNDERLINE = '\033[4m'
+
+  comandos = {
+    "gerente": [
+      "1 - Total de vendas de um vendedor",
+      "2 - Total de vendas de uma loja",
+      "3 - Total de vendas da rede de lojas em um período",
+      "4 - Melhor vendedor",
+      "5 - Melhor loja",
+      "0 - Sair"
+    ],
+    "vendedor": [
+      "1 - Adicionar venda",
+      "0 - Sair"
+    ],
+    "admin": [
+      "1 - Clientes ativos",
+      "2 - Usuarios logados",
+      "3 - Resetar do banco de dados",
+      "4 - Remover cliente",
+      "5 - Simular falha de conexão com o servidor",
+      "0 - Encerrar"
+    ]
+  }
 
   def intro():
     print("""
@@ -248,5 +204,15 @@ class console():
   def print_sucesso(txt:str):
     print(console.OKGREEN + txt + console.ENDC)
   
-  def set(self):
-    return False
+  def sprint_thebest(strf:str, str1:str, str2:int, str3:float):
+    return f"{strf} {console.OKCYAN}{str1}{console.ENDC} com o total de {console.OKCYAN}{int(str2)} venda(s){console.ENDC}, totalizando {console.OKCYAN}R$ {float(str3)}{console.ENDC}"
+
+  def print_notificacao(filename:str):
+    print(f"USAGE: python {filename} <IP> <Port>")
+    print(f"EXAMPLE: python {filename} localhost 8000")
+
+  def print_comandos(cargo:str):
+    print("\nComandos disponíveis:")
+    for comando in console.comandos[cargo]:
+      print(comando)
+    print("\t")

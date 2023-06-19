@@ -3,7 +3,8 @@ import threading
 import os
 import json
 import sys
-from library import database, console, helper, app
+from library import database, console, helper, _
+from app import app
 from constants import consts
 
 class sender(app):
@@ -22,41 +23,47 @@ class sender(app):
 				
 			match self.COMMAND_CODE:
 				case consts.COM_EXIT:
-					for client in self.CLIENTS:
-						client.send(json.dumps([self.COMMAND_CODE, None]).encode())
-					os._exit(1) 
+					try:
+						for client in self.CLIENTS:
+							client.send(json.dumps([self.COMMAND_CODE, None]).encode())
+					finally:
+						os._exit(1) 
 				case consts.COM_ACTIVE_CLIENTS:
 					for client in self.CLIENTS:
 						print(client.getsockname())
 				case consts.COM_LOGGED_USERS:
 					for username in self.USERS:
 						user = self.USERS[username]
-						print(f"{user['id']}, {user['username']}, {user['nome']}, {user['cargo']}")
+						print(f"{user['id']}, {user['username']}, {user['name']}, {user['role']}")
 				case consts.COM_SIMULATE_CONNECTION_FAILURE:
-					print("Inciando a conexão com o servidor de backup...")
+					print(_("initiating.connection.backup.server"))
 					self.connect_backup_server()
-					console.print_sucesso("Servidor de backup iniciado.")
+					console.print_sucesso(_("backup.server.started"))
 					for client in self.CLIENTS:
 						client.send(json.dumps([self.COMMAND_CODE, None]).encode())
 					self.initiliaze(self.SERVERS[1])
 				case _:
-					console.print_erro("Código de comando inválido.")
+					console.print_erro(_("command.unknown"))
 
 	def frontend(self, s):
 		while True:
-			client, address = s.accept()
-			console.print_info(f"Nova conexão em: {address}")
-			threading.Thread(target=self.connect, args=(client,address,)).start()
+			# permitir a conexão com o cliente
+			client, [host, port] = s.accept()
+			console.print_info(_("client.connection.established").format(host, port))
+
+			# criar uma nova instância de Thread
+			thread = threading.Thread(target=self.connect, args=(client,host,port,))
+			# iniciar a execução da thread
+			thread.start()
 		
 	def initiliaze(self, s):
-		
-		# Criar e iniciar dois threads para cada loop while
+		# criar e iniciar dois threads para o backend e frontend
 		thread1 = threading.Thread(target=self.backend)
 		thread2 = threading.Thread(target=self.frontend,args=(s,))
+		# iniciar a execução das threads
 		thread1.start()
 		thread2.start()
-
-		# Unir as threads para aguardar a conclusão
+		# aguardar a conclusão das threads
 		thread1.join()
 		thread2.join()
 
@@ -64,72 +71,77 @@ class sender(app):
 		while True:
 			try:
 				json_data = client.recv(1024).decode()
+			except ConnectionResetError:
+				host, port = client.getsockname()
+				console.print_erro(_("lost.connection").format(host, port))
+				break
 			except ConnectionAbortedError:
 				self.initiliaze(self.SERVERS[1])
 				break
 
-			try:
-				data = json.loads(json_data) if json_data else {
-					"codigo": consts.COM_EXIT
-				}
-			except json.JSONDecodeError as e:
-				print("Error decoding JSON:", str(e))
-				break
+			code, data = json.loads(json_data) if json_data else [consts.COM_BREAK, None]
 			
-			codigo = data.get("codigo")
-			match codigo:
+			match code:
+				case consts.COM_BREAK:
+					del self.USERS[username]
+					break
 				case consts.COM_EXIT:
-					client.send(json.dumps([codigo, None]).encode())
-					print(f"Usuário desconectado: {console.OKBLUE}{username}{console.ENDC}")
+					client.send(json.dumps([code, None]).encode())
+					print(_("user.disconnected").format(username))
 					del self.USERS[username]
 					break
 				case consts.COM_SELLER_TOTAL_SALES:
-					nome = data.get("username")
-					if self.database.has_vendedor(nome):
-						nome, vendas, total = self.database.get_total_vendas_vendedor(nome)
-						client.send(json.dumps([codigo, f"O vendedor {nome} realizou no total {int(vendas)} venda(s), totalizando R$ {float(total)}"]).encode())
+					name = data.get("username")
+					if self.database.has_vendedor(name):
+						name, vendas, total = self.database.get_total_vendas_vendedor(name)
+						client.send(json.dumps([code, _("msg.seller.total.sales").format(name, int(vendas), float(total))]).encode())
 					else: 
-						client.send(json.dumps([codigo, f"O vendedor '{nome}' não existe. Tente novamente.".encode()]).encode())
+						client.send(json.dumps([code, _("msg.unknown.seller").format(name)]).encode())
 				case consts.COM_SHOP_TOTAL_SALES:
-					nome = data.get("nome")
-					if self.database.has_loja(nome):
-						vendas, total = self.database.get_total_vendas_loja(nome)
-						client.send(json.dumps([codigo, f"A loja {nome} teve no total {int(vendas)} venda(s), totalizando R$ {float(total)}"]).encode())
+					name = data.get("name")
+					if self.database.has_loja(name):
+						vendas, total = self.database.get_total_vendas_loja(name)
+						client.send(json.dumps([code, _("msg.shop.total.sales").format(name, int(vendas), float(total))]).encode())
 					else: 
-						client.send(json.dumps([codigo, f"A loja '{nome}' não existe. Tente novamente."]).encode())
+						client.send(json.dumps([code, _("msg.unknown.shop").format(name)]).encode())
 				case consts.COM_TOTAL_SALES_PERIOD:
 					min = data.get("min")
 					max = data.get("max")
 					vendas, total = self.database.get_total_vendas_periodo(data.get("min"), data.get("max"))
-					client.send(json.dumps([codigo, f"O total de vendas da rede de lojas entre o periodo de {min} e {max} foi de {int(vendas)}, totalizando R$ {float(total)}"]).encode())
+					if total is None:
+						client.send(json.dumps([code, _("msg.nosales")]).encode())
+					else:
+						client.send(json.dumps([code, _("msg.total.sales.period").format(min, max, int(vendas), float(total))]).encode())
 				case consts.COM_BEST_SELLER:
-					nome, vendas, total = self.database.get_melhor_vendedor()
-					client.send(json.dumps([codigo, console.sprint_thebest('O melhor vendedor foi', nome, vendas, total)]).encode())
+					name, vendas, total = self.database.get_melhor_vendedor()
+					client.send(json.dumps([code, _("msg.best.seller").format(name, vendas, total)]).encode())
 				case consts.COM_BEST_SHOP:
-					nome, vendas, total = self.database.get_melhor_loja()
-					client.send(json.dumps([codigo, console.sprint_thebest('A melhor loja foi', nome, vendas, total)]).encode())
+					name, vendas, total = self.database.get_melhor_loja()
+					client.send(json.dumps([code, _("msg.best.shop").format(name, vendas, total)]).encode())
 				case consts.COM_ADD_SALE:
-					self.database.add_venda(data.get("loja"), data.get("data"), data.get("valor"))
-					client.send(json.dumps([codigo, "Dados inseridos com sucesso!"]).encode())
+					self.database.add_sale(data.get("shopname"), data.get("date"), data.get("price"), self.USERS[username]["id"])
+					client.send(json.dumps([code, _("msg.data.entered")]).encode())
 				case _:
-					console.print_erro("Código de comando inválido")
+					console.print_erro(_("command.unknown"))
 
-	def connect(self, client, address:list):
-		
+	def connect(self, client, host:str, port):
 		while True:
-			codigo, data = json.loads(client.recv(1024).decode())
-
+			try:
+				codigo, data = json.loads(client.recv(1024).decode())
+			except ConnectionResetError:
+				console.print_erro(_("lost.connection").format(host, port))
+				break
+			
 			match codigo:
-				case consts.COM_LOGIN:
+				case consts.COM_LOGIN | consts.COM_RECONNECT:
 					username, password = data
 					# checar se o usuario ja esta logado.
 					if username in self.USERS:
-						console.print_alerta("Tentativa de autenticação com as credenciais de um usuário já logado.")
+						console.print_alerta(_("auth.attempt"))
 					else:
-						host, port = address
-						userdata = self.database.login(username,password, host, port)
+						userdata = self.database.login(username,password)
 						if userdata is not None:
-							id, nome, cargo = userdata
+							id, name, role = userdata
 
 							if username not in self.USERS:
 								self.CLIENTS.append(client)
@@ -137,47 +149,68 @@ class sender(app):
 							self.USERS[username] = {
 								"id": id, 
 								"username": username, 
-								"nome": nome, 
-								"cargo": cargo
+								"name": name, 
+								"role": role
 							}
 
 							threading.Thread(target=self.resolve, args=(client, username)).start()
 							client.send(json.dumps([consts.SUCCESS, {
 								"server_backup": self.SERVER_BACKUP,
-								"userdata": [nome, cargo]
+								"userdata": [name, role]
 							}]).encode())
-
-							print(f"Uma nova conexão foi estabelecida no endereço {host}, na porta {port}.")
-							print(f"Usuário conectado: {console.OKBLUE}{username}{console.ENDC}")
+							print(_("user.connected" if codigo == consts.COM_LOGIN else "user.reconnected").format(username))
 							break
 						else:
 							client.send(json.dumps([consts.ERROR, None]).encode())
 
 	def connect_backup_server(self):
 		host, port = self.SERVER_BACKUP
+		# criar um objeto de soquete do servidor
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		s.bind((host, int(port)))
-		s.listen(10)
+		s.listen(5)
 		self.SERVERS.append(s)
+
+	def create_file(self, filename:str) -> bool :
+		if not os.path.exists(filename):
+			with open(filename, 'w') as file:
+				file.write("")
+				return True
+		return False
 
 	def start(self):
 		if len(sys.argv) < 3:
 			console.print_notificacao("server.py")
 			return
 
-		self.database = database("banco-de-dados.sq3")
+		db_file = "banco-de-dados.sq3"
+		# criar arquivo, caso ele não exista
+		self.create_file(db_file)
+		self.database = database(db_file)
 		self.database.connect()
 		self.database.clear()
 		self.database.bulk_insert()
-		
+
+		host = sys.argv[1]
+		port = int(sys.argv[2])
+
+		# criar um objeto de soquete do servidor
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		s.bind((sys.argv[1], int(sys.argv[2])))
-		s.listen(10)
+		try:
+			# vincular o objeto de soquete do servidor a um endereço e porta
+			s.bind((host, port))
+			# permitir no máximo 5 conexões em fila
+			s.listen(5)
+		except OSError:
+			console.print_erro(_("address.use").format(host, port))
+			return
 
 		self.SERVERS.append(s)
 		self.SERVER_BACKUP = f"localhost {helper.get_random_open_port()}".split()
 
 		console.print_comandos("admin")
+
+		print(_("waiting.connection"))
 		self.initiliaze(s)
 	
 sender = sender()

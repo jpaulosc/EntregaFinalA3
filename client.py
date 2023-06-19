@@ -3,7 +3,8 @@ import threading
 import os
 import sys
 import json
-from library import console, app
+from library import console, helper, _
+from app import *
 from datetime import date
 from constants import consts
 
@@ -15,28 +16,28 @@ class receiver(app):
 
 	def login(self):
 		while True:
-			print("Digite o nome de usuário:")
-			username = input("> ").lower()
-			print("Digite a senha:")
+			print(_("enter.username"))
+			username = self.enter_username()
+			print(_("enter.password"))
 			password = input("> ")
 			self.socket.send(json.dumps([consts.COM_LOGIN, [username, password]]).encode())
 			codigo, data = json.loads(self.socket.recv(1024).decode())
 			match codigo:
 				case consts.ERROR:
-					console.print_alerta("O nome de usuário ou a senha digitados estão incorretos. Tente novamente")
+					console.print_alerta(_("auth.fail"))
 				case consts.SUCCESS:
-					nome, cargo = data["userdata"]
+					name, role = data["userdata"]
 					self.LOGGED = True
 					self.USERDATA = {
 						"username": username,
 						"password": password,
-						"nome": nome,
-						"cargo": cargo,
+						"name": name,
+						"role": role,
 					}
 					self.SERVER_BACKUP = data["server_backup"]
 					self.INPUT_PREFIX = f"{console.OKGREEN}{username}@projetoa3{console.ENDC}: "
-					console.print_sucesso("\nAutenticação realizada com sucesso!\n")
-					console.print_info(f"Bem vindo de volta {console.OKCYAN}{console.UNDERLINE}{nome}{console.ENDC}{console.OKBLUE}!{console.ENDC}")
+					console.print_sucesso(_("auth.success"))
+					console.print_info(f"Bem vindo de volta {console.OKCYAN}{console.UNDERLINE}{name}{console.ENDC}{console.OKBLUE}!{console.ENDC}")
 					break
 
 	def response(self):
@@ -45,17 +46,19 @@ class receiver(app):
 			data = json.loads(data.decode())
 			match data[0]:
 				case consts.COM_SIMULATE_CONNECTION_FAILURE:
-					console.print_alerta("Falha de conexão com o servidor principal.")
+					console.print_erro(_("connection.main.server.failed"))
 					host, port = self.SERVER_BACKUP
+					self.socket.close()
+					# criar um novo objeto de soquete do servidor
 					self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-					# Atualize o endereço do servidor
-					novo_endereco = (host, int(port))
-					print(f'Conectando-se ao novo servidor em {novo_endereco}...')
-					self.socket.connect(novo_endereco)
-					console.print_sucesso('Conectado ao servidor de backup.')
-					# Realizar a autenticação com os dados já salvos
-					self.socket.send(json.dumps([consts.COM_LOGIN, [self.USERDATA["username"], self.USERDATA["password"]]]).encode())
-					print('Digite algum código de comando para continuar...')
+					# atualizar o endereço do servidor
+					new_address = (host, int(port))
+					print(_("connecting.new.server").format(host, port))
+					self.socket.connect(new_address)
+					console.print_sucesso(_("connected.backup.server"))
+					# realizar novamente a autenticação com os dados já salvos
+					self.socket.send(json.dumps([consts.COM_RECONNECT, [self.USERDATA["username"], self.USERDATA["password"]]]).encode())
+					print(_("continue"))
 					continue
 				case consts.COM_EXIT:
 					self.LOGGED = False
@@ -66,54 +69,84 @@ class receiver(app):
 					if len(data) < 3:
 						print(data[1])
 
+	def enter_price(self):
+		value = None
+		while True:
+			value = input("> ")
+			if helper.validate_price(value):
+				break
+			else:
+				print(_("invalid.price"))
+		return value
+
+	def enter_username(self):
+		value = None
+		while True:
+			value = input("> ").lower()
+			if helper.validate_username(value):
+				break
+			else:
+				print(_("invalid.username"))
+		return value
+
+	def enter_date(self):
+		value = None
+		while True:
+			value = input("> ")
+			if helper.validate_date(value):
+				break
+			else:
+				print(_("invalid.date"))
+		return value
+
 	def request(self):
 		while self.LOGGED:
 
 			if not self.command_code():
 				continue
 
-			m = {"codigo": self.COMMAND_CODE}
+			code = self.COMMAND_CODE
+			data = {}
 
 			if self.COMMAND_CODE == consts.COM_EXIT:
-				self.socket.send(json.dumps(m).encode())
+				self.socket.send(json.dumps(data).encode())
 				break
 
-			match self.USERDATA["cargo"]:
-				case "gerente":
+			match self.USERDATA["role"]:
+				case consts.MANAGER:
 					match self.COMMAND_CODE:
 						# total de vendas de um vendedor
 						case consts.COM_SELLER_TOTAL_SALES:
-							print("Digite o nome de usuário do vendedor:")
-							m["username"] = input("> ")
+							print(_("enter.seller.username"))
+							data["username"] = self.enter_username()
 						# total de vendas de uma loja
 						case consts.COM_SHOP_TOTAL_SALES:
-							print("Digite o nome da loja:")
-							m["nome"] = input("> ").lower()
+							print(_("enter.shopname"))
+							data["name"] = input("> ").lower()
 						# total de vendas da rede de lojas em um período
 						case consts.COM_TOTAL_SALES_PERIOD:
-							print("Digite a data minima(AAAA-MM-DD):")
-							m["min"] = input("> ")
-							print("Digite a data maxima(AAAA-MM-DD):")
-							m["max"] = input("> ")
+							print(_("enter.date.min"))
+							data["min"] = self.enter_date()
+							print(_("enter.date.max"))
+							data["max"] = self.enter_date()
 						case _:
 							if self.COMMAND_CODE not in [consts.COM_EXIT, consts.COM_BEST_SELLER, consts.COM_BEST_SHOP]:
-								console.print_erro("Código de comando inválido.")
+								console.print_erro(_("command.unknown"))
 								continue
-				case "vendedor":
+				case consts.SELLER:
 					match self.COMMAND_CODE:
 						# adicionar venda
-						case 1:
-							print("Digite o nome da loja:")
-							m["loja"] = input("> ")
-							print("Digite o valor:")
-							m["valor"] = float(input("> "))
-							m["data"] = str(date.today())
-							m["codigo"] = consts.COM_ADD_SALE
+						case consts.COM_ADD_SALE:
+							print(_("enter.shopname"))
+							data["shopname"] = input("> ")
+							print(_("enter.price"))
+							data["price"] = self.enter_price()
+							data["date"] = str(date.today())
 						case _:
-							console.print_erro("Código de comando inválido.")
+							console.print_erro(_("command.unknown"))
 							continue
 
-			self.socket.send(json.dumps(m).encode())
+			self.socket.send(json.dumps([code, data]).encode())
 
 	def start(self):
 		if len(sys.argv) < 3:
@@ -124,7 +157,7 @@ class receiver(app):
 		self.socket.connect((sys.argv[1], int(sys.argv[2])))
 		
 		console.intro()
-		console.print_info("Digite o seu nome de usuário e senha para prosseguir.\n")
+		console.print_info(_("login.message"))
 
 		self.login()
 
@@ -132,8 +165,8 @@ class receiver(app):
 		serverListenThread = threading.Thread(target=self.response)
 
 		if self.LOGGED:
-			console.print_comandos(self.USERDATA["cargo"])
-			print(console.OKBLUE + f"Digite o {console.BOLD}número do comando{console.ENDC} {console.OKBLUE}para realizar alguma tarefa.\n" + console.ENDC)
+			console.print_comandos(self.USERDATA["role"])
+			console.print_info(_("command.info"))
 			userInputThread.start()
 			serverListenThread.start()
 
@@ -141,7 +174,7 @@ class receiver(app):
 			if not self.LOGGED:
 				self.socket.shutdown(socket.SHUT_RDWR)
 				self.socket.close()
-				console.print_sucesso("\nDesconectado do A3Projeto.")
+				console.print_sucesso(_("logout.message"))
 				os._exit(1)
 
 receiver = receiver()

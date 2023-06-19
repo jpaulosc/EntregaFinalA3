@@ -21,11 +21,17 @@ consts.COM_TOTAL_SALES_PERIOD = 3
 consts.COM_BEST_SELLER = 4
 consts.COM_BEST_SHOP = 5
 consts.COM_ADD_SALE = 6
+consts.COM_BREAK = -1
 
 consts.COM_ACTIVE_CLIENTS = 7
 consts.COM_LOGGED_USERS = 8
 consts.COM_SIMULATE_CONNECTION_FAILURE = 9
 consts.COM_LOGIN = 10
+consts.COM_RECONNECT = 11
 
-consts.ERROR = 0
-consts.SUCCESS = 1
+consts.ERROR = '/error'
+consts.SUCCESS = '/success'
+
+consts.SELLER = 'seller'
+consts.SHOP = 'shop'
+consts.MANAGER = 'manager'

@@ -3,32 +3,27 @@ import threading
 import os
 import json
 import sys
-from library import database, console, helper
+from library import database, console, helper, app
 from constants import consts
 
-class sender():
+class sender(app):
 	
 	SERVERS = []
 
 	CLIENTS = []
 
-	SERVER_BACKUP = None
-
 	USERS = {}
 
 	def backend(self):
 		while True:
-			codigo = input("")
-			if codigo.isdigit():
-				codigo = int(codigo)
-			else:
-				print("Entrada inválida. Por favor insira um número válido.")
+			
+			if not self.command_code():
 				continue
 				
-			match codigo:
+			match self.COMMAND_CODE:
 				case consts.COM_EXIT:
 					for client in self.CLIENTS:
-						client.send(json.dumps([codigo, None]).encode())
+						client.send(json.dumps([self.COMMAND_CODE, None]).encode())
 					os._exit(1) 
 				case consts.COM_ACTIVE_CLIENTS:
 					for client in self.CLIENTS:
@@ -40,17 +35,17 @@ class sender():
 				case consts.COM_SIMULATE_CONNECTION_FAILURE:
 					print("Inciando a conexão com o servidor de backup...")
 					self.connect_backup_server()
-					print("Servidor de backup iniciado")
+					console.print_sucesso("Servidor de backup iniciado.")
 					for client in self.CLIENTS:
-						client.send(json.dumps([codigo, None]).encode())
+						client.send(json.dumps([self.COMMAND_CODE, None]).encode())
 					self.initiliaze(self.SERVERS[1])
 				case _:
-					print("comando invalido")
+					console.print_erro("Código de comando inválido.")
 
 	def frontend(self, s):
 		while True:
 			client, address = s.accept()
-			print("Nova conexão em:", address)
+			console.print_info(f"Nova conexão em: {address}")
 			threading.Thread(target=self.connect, args=(client,address,)).start()
 		
 	def initiliaze(self, s):
@@ -85,7 +80,7 @@ class sender():
 			match codigo:
 				case consts.COM_EXIT:
 					client.send(json.dumps([codigo, None]).encode())
-					print(f"Usuário deslogado: {console.OKBLUE}{username}{console.ENDC}")
+					print(f"Usuário desconectado: {console.OKBLUE}{username}{console.ENDC}")
 					del self.USERS[username]
 					break
 				case consts.COM_SELLER_TOTAL_SALES:
@@ -122,36 +117,41 @@ class sender():
 	def connect(self, client, address:list):
 		
 		while True:
-			data = client.recv(1024).decode()
-			username, password = json.loads(data)
+			codigo, data = json.loads(client.recv(1024).decode())
 
-			# checar se o usuario ja esta logado.
-			if username in self.USERS:
-				print("Tentativa de conexão com um usuario já logado.")
-			else:
-				host, port = address
-				userdata = self.database.login(username,password, host, port)
-				if userdata is not None:
-					id, nome, cargo = userdata
+			match codigo:
+				case consts.COM_LOGIN:
+					username, password = data
+					# checar se o usuario ja esta logado.
+					if username in self.USERS:
+						console.print_alerta("Tentativa de autenticação com as credenciais de um usuário já logado.")
+					else:
+						host, port = address
+						userdata = self.database.login(username,password, host, port)
+						if userdata is not None:
+							id, nome, cargo = userdata
 
-					if username not in self.USERS:
-						self.CLIENTS.append(client)
+							if username not in self.USERS:
+								self.CLIENTS.append(client)
 
-					self.USERS[username] = {
-						"id": id, 
-						"username": username, 
-						"nome": nome, 
-						"cargo": cargo
-					}
+							self.USERS[username] = {
+								"id": id, 
+								"username": username, 
+								"nome": nome, 
+								"cargo": cargo
+							}
 
-					threading.Thread(target=self.resolve, args=(client, username)).start()
-					client.send(json.dumps([cargo, nome, self.SERVER_BACKUP]).encode())
+							threading.Thread(target=self.resolve, args=(client, username)).start()
+							client.send(json.dumps([consts.SUCCESS, {
+								"server_backup": self.SERVER_BACKUP,
+								"userdata": [nome, cargo]
+							}]).encode())
 
-					print(f"Uma nova conexão foi estabelecida no endereço {host}, na porta {port}")
-					print(f"Novo usuário logado: {console.OKBLUE}{username}{console.ENDC}, seu cargo é {cargo}.")
-					break
-				else:
-					client.send(b"/wrongPasswordOrUsername")
+							print(f"Uma nova conexão foi estabelecida no endereço {host}, na porta {port}.")
+							print(f"Usuário conectado: {console.OKBLUE}{username}{console.ENDC}")
+							break
+						else:
+							client.send(json.dumps([consts.ERROR, None]).encode())
 
 	def connect_backup_server(self):
 		host, port = self.SERVER_BACKUP

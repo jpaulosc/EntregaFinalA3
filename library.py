@@ -5,21 +5,19 @@ import sqlite3
 import json
 from constants import consts
 
-class message:
+class app:
 
-  SERVER_BACKUP = None
-
-  def __init__(self):
-    self.socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-
-  def get(self):
-    return json.loads(self.socket.recv(1024).decode())
-
-  def send(self, m:object|list, client = None):
-    if client is None:
-      self.socket.send(json.dumps(m).encode())
+  COMMAND_CODE = None
+  INPUT_PREFIX = ''
+        
+  def command_code(self) -> bool :
+    codigo = input(f"{self.INPUT_PREFIX}")
+    if codigo.isdigit():
+      self.COMMAND_CODE = int(codigo)
+      return True
     else:
-      client.send(json.dumps(m).encode())
+      console.print_alerta("Entrada inválida. Por favor insira um número válido.")
+    return False
 
 class helper():
   def get_random_open_port():
@@ -34,19 +32,6 @@ class helper():
         except socket.error:
           pass
     return result
-
-class receiver():
-  
-  LOGGED = False
-  PREFIX = False
-
-  def __init__(self):
-    self.test = 1
-    self.s = 1
-  def request(self):
-    return False
-  def response(self):
-    return False
 
 class database():
   def __init__(self, name:str):

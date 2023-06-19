@@ -59,7 +59,6 @@ class sender():
 		thread2 = threading.Thread(target=self.frontend,args=(s,))
 		thread1.start()
 		thread2.start()
-
 		# Unir as threads para aguardar a conclusão
 		thread1.join()
 		thread2.join()

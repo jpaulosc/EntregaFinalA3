@@ -3,9 +3,9 @@ import threading
 import os
 import sys
 import json
-from lib import database, console
+from library import database, console
 from datetime import date
-import importlib
+from constants import consts
 
 state = {"connected": False}
 app_db = database("banco-de-dados.sq3")
@@ -43,7 +43,7 @@ def response():
 		data = s.recv(1024)
 		data = json.loads(data.decode())
 		match data[0]:
-			case 8:
+			case consts.COM_SIMULATE_CONNECTION_FAILURE:
 				print("Falha de conexão com o servidor")
 				host, port = server_backup
 				s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -54,7 +54,7 @@ def response():
 				print('Connected to the new server')
 				s.send(json.dumps([state["username"], state["password"]]).encode())
 				continue
-			case 0:
+			case consts.COM_EXIT:
 				state["logado"] = False
 				break
 			case _:
@@ -73,7 +73,7 @@ def request():
 
 		m = {"codigo": codigo}
 
-		if codigo == 0:
+		if codigo == consts.COM_EXIT:
 			s.send(json.dumps(m).encode())
 			break
 
@@ -81,21 +81,21 @@ def request():
 			case "gerente":
 				match codigo:
 					# total de vendas de um vendedor
-					case 1:
+					case consts.COM_SELLER_TOTAL_SALES:
 						print("Digite o nome de usuário do vendedor:")
 						m["username"] = input("> ")
 					# total de vendas de uma loja
-					case 2:
+					case consts.COM_SHOP_TOTAL_SALES:
 						print("Digite o nome da loja:")
 						m["nome"] = input("> ").lower()
 					# total de vendas da rede de lojas em um período
-					case 3:
+					case consts.COM_TOTAL_SALES_PERIOD:
 						print("Digite a data minima(AAAA-MM-DD):")
 						m["min"] = input("> ")
 						print("Digite a data maxima(AAAA-MM-DD):")
 						m["max"] = input("> ")
 					case _:
-						if codigo not in [0, 4, 5]:
+						if codigo not in [consts.COM_EXIT, consts.COM_BEST_SELLER, consts.COM_BEST_SHOP]:
 							console.print_erro("Código de comando inválido")
 							continue
 			case "vendedor":
@@ -107,7 +107,7 @@ def request():
 						print("Digite o valor:")
 						m["valor"] = float(input("> "))
 						m["data"] = str(date.today())
-						m["codigo"] = 6
+						m["codigo"] = consts.COM_ADD_SALE
 					case _:
 						console.print_erro("Código de comando inválido")
 						continue

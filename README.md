@@ -23,7 +23,7 @@ Para executar o script python, seu sistema deve ter os seguintes programas/pacot
 ## Instruções (Cliente)
 
 1. Abra uma janela de terminal no diretório que contém *client.py* e execute o seguinte comando:
-> cliente python.py localhost 8000
+> python client.py localhost 8000
 
 2. Opcional. Substitua `localhost` pelo seu IP e `8000` por um número de porta TCP de sua escolha.
 

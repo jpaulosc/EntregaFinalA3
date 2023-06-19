@@ -39,11 +39,8 @@ class sender():
 						print(f"{user['id']}, {user['username']}, {user['nome']}, {user['cargo']}")
 				case consts.COM_SIMULATE_CONNECTION_FAILURE:
 					print("Inciando a conexão com o servidor de backup...")
-					host, port = self.SERVER_BACKUP
-					n = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-					n.bind((host, int(port)))
-					n.listen(10)
-					self.SERVERS.append(n)
+					self.connect_backup_server()
+					print("Servidor de backup iniciado")
 					for client in self.CLIENTS:
 						client.send(json.dumps([codigo, None]).encode())
 					self.initiliaze(self.SERVERS[1])
@@ -154,6 +151,13 @@ class sender():
 					break
 				else:
 					client.send(b"/wrongPasswordOrUsername")
+
+	def connect_backup_server(self):
+		host, port = self.SERVER_BACKUP
+		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		s.bind((host, int(port)))
+		s.listen(10)
+		self.SERVERS.append(s)
 
 	def start(self):
 		if len(sys.argv) < 3:

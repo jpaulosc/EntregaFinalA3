@@ -11,7 +11,6 @@ state = {"connected": False}
 app_db = database("banco-de-dados.sq3")
 server_backup = None
 
-# Create a socket object
 s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 
 def login():

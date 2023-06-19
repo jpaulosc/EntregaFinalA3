@@ -1,7 +1,6 @@
 import types
 
 consts = types.SimpleNamespace()
-
 consts.TYPE_TEXT = 10
 consts.TYPE_DATE = 20
 consts.TYPE_CLIENT = 30

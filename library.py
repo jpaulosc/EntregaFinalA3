@@ -36,14 +36,6 @@ class helper():
           pass
     return result
 
-class sender():
-	def __init__(self):
-		self.test = 1
-	def request(self):
-		return False
-	def response(self):
-		return False
-
 class receiver():
   
   LOGGED = False

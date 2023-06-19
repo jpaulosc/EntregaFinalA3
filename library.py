@@ -3,6 +3,24 @@ import random
 import socket
 import threading
 import sqlite3
+import json
+from constants import consts
+
+class message:
+
+  SERVER_BACKUP = None
+
+  def __init__(self):
+    self.socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+
+  def get(self):
+    return json.loads(self.socket.recv(1024).decode())
+
+  def send(self, m:object|list, client = None):
+    if client is None:
+      self.socket.send(json.dumps(m).encode())
+    else:
+      client.send(json.dumps(m).encode())
 
 class helper():
   def get_random_open_port():
@@ -159,24 +177,22 @@ class console():
 
   comandos = {
     "gerente": [
-      "1 - Total de vendas de um vendedor",
-      "2 - Total de vendas de uma loja",
-      "3 - Total de vendas da rede de lojas em um período",
-      "4 - Melhor vendedor",
-      "5 - Melhor loja",
-      "0 - Sair"
+      str(consts.COM_SELLER_TOTAL_SALES) + " - Total de vendas de um vendedor",
+      str(consts.COM_SHOP_TOTAL_SALES ) + " - Total de vendas de uma loja",
+      str(consts.COM_TOTAL_SALES_PERIOD) + " - Total de vendas da rede de lojas em um período",
+      str(consts.COM_BEST_SELLER) + " - Melhor vendedor",
+      str(consts.COM_BEST_SHOP) + " - Melhor loja",
+      str(consts.COM_EXIT) + " - Sair"
     ],
     "vendedor": [
-      "1 - Adicionar venda",
-      "0 - Sair"
+      str(consts.COM_ADD_SALE ) + " - Adicionar venda",
+      str(consts.COM_EXIT) + " - Sair"
     ],
     "admin": [
-      "1 - Clientes ativos",
-      "2 - Usuarios logados",
-      "3 - Resetar do banco de dados",
-      "4 - Remover cliente",
-      "5 - Simular falha de conexão com o servidor",
-      "0 - Encerrar"
+      str(consts.COM_ACTIVE_CLIENTS) + " - Clientes ativos",
+      str(consts.COM_LOGGED_USERS) + " - Usuarios logados",
+      str(consts.COM_SIMULATE_CONNECTION_FAILURE) + " - Simular falha de conexão com o servidor",
+      str(consts.COM_EXIT) + " - Encerrar"
     ]
   }
 

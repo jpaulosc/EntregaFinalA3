@@ -72,7 +72,6 @@ class console():
     "João Paulo",
     "Gabriel",
     "Jonathas",
-    "João Marcos"
   ]
 
   commands = {
@@ -152,7 +151,7 @@ class console():
   def enter_sale():
     m = {}
     print("Digite o nome da loja:")
-    m["shopname"] = input("> ")
+    m["store"] = input("> ")
     print("Digite o valor:")
     m["price"] = console.enter_price()
     m["date"] = str(date.today())
@@ -190,7 +189,7 @@ class database():
     # tabela de usuarios
     self.cursor.execute("CREATE TABLE IF NOT EXISTS users (id integer PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'seller')")
     # tabela de vendas
-    self.cursor.execute("CREATE TABLE IF NOT EXISTS sales (id integer PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, shopname TEXT NOT NULL, date text NOT NULL, price float NOT NULL, FOREIGN KEY (user_id) REFERENCES users(id))")
+    self.cursor.execute("CREATE TABLE IF NOT EXISTS sales (id integer PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, store TEXT NOT NULL, date text NOT NULL, price float NOT NULL, FOREIGN KEY (user_id) REFERENCES users(id))")
    
     # adicionar o gerente Jess
     self.add_user('jess', '123', 'Jess', role="manager")
@@ -202,6 +201,8 @@ class database():
     user_id = self.add_user('paul', '123', 'Paul', role="seller")
     self.add_sale('americanas', '2023-05-09', 200, user_id)
     self.add_sale('bompreco', '2023-05-08', 600, user_id)
+
+    self.banco.commit()
     
   # obter todos os usuarios
   def login(self, username:str, password:str) -> bool:
@@ -221,7 +222,7 @@ class database():
   
   # adicionar venda
   def add_sale(self, store:str, date:str, price:float, user_id:int):
-    self.cursor.execute(f"INSERT INTO sales (user_id, shopname, date, price) VALUES ('{user_id}', '{store}', '{date}', {price})")
+    self.cursor.execute(f"INSERT INTO sales (user_id, store, date, price) VALUES ('{user_id}', '{store}', '{date}', {price})")
     return self.cursor.rowcount > 0
 
   # limpar as tabelas de usuários e vendas
@@ -238,14 +239,14 @@ class database():
     return self.cursor.fetchone() is not None
 
   # total de vendas de uma loja
-  def get_total_store_sales(self, shopname:str):
-    consulta_sql = "SELECT COUNT(*), SUM(price) FROM sales WHERE shopname = ?"
-    self.cursor.execute(consulta_sql, (shopname,))
+  def get_total_store_sales(self, store:str):
+    consulta_sql = "SELECT COUNT(*), SUM(price) FROM sales WHERE store = ?"
+    self.cursor.execute(consulta_sql, (store,))
     return self.cursor.fetchone()
   
   # verificar se loja existe
   def has_store(self, name:str) -> bool:
-    consulta_sql = "SELECT 1 FROM sales WHERE shopname = ? LIMIT 1"
+    consulta_sql = "SELECT 1 FROM sales WHERE store = ? LIMIT 1"
     self.cursor.execute(consulta_sql, (name,))
     return self.cursor.fetchone() is not None
   
@@ -286,7 +287,7 @@ class database():
     
   # melhor loja (aquela que tem o maior valor acumulado de vendas)
   def get_best_store(self):
-    consulta_sql = "SELECT shopname, COUNT(*), SUM(price) as total_vendas FROM sales GROUP BY shopname ORDER BY total_vendas DESC LIMIT 1"
+    consulta_sql = "SELECT store, COUNT(*), SUM(price) as total_vendas FROM sales GROUP BY store ORDER BY total_vendas DESC LIMIT 1"
     self.cursor.execute(consulta_sql)
     return self.cursor.fetchone()
 

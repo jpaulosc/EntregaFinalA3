@@ -1,4 +1,4 @@
-from src.utils import agent, MIDDLEWARE_SERVER
+from src.core import agent, BRIDGE_SERVER
 
 client = agent()
-client.connect(MIDDLEWARE_SERVER)
+client.connect(BRIDGE_SERVER)

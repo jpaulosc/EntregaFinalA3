@@ -3,7 +3,7 @@ import socket
 import threading
 from src.library import *
 
-MIDDLEWARE_SERVER = {
+BRIDGE_SERVER = {
 	"host": "localhost",
 	"port": 8061,
 	"status": False,
@@ -23,7 +23,7 @@ class server():
     self.db = database
     self.db.connect()
      
-  def init(self, main_server, message):
+  def init(self, main_server, message:str):
     host = main_server["host"]
     port = main_server["port"]
 
@@ -40,36 +40,36 @@ class server():
   def on_client_connect(self, client_socket, alias:str):
       print(f"O cliente {alias} se conectou ao servidor")
       
-  def resolve(self, code, alias, data, client_socket):
+  def resolve(self, code:str, alias:str, data, client_socket):
     s = self.clients.get(data["client_socket"])
     match code:
       case "/1":
-        nome = data.get("username")
-        if db.has_vendedor(nome):
-          nome, vendas, total = db.get_total_vendas_vendedor(nome)
-          console.send(s, "O vendedor {} realizou no total {} venda(s), totalizando R$ {:.2f}".format(nome,vendas,total), data)
+        name = data.get("username")
+        if db.has_seller(name):
+          name, sales, total = db.get_total_seller_sales(name)
+          console.send(s, "O vendedor {} realizou no total {} venda(s), totalizando R$ {:.2f}".format(name, sales, total), data)
         else: 
-          console.send(s,"O vendedor '{}' não existe. Tente novamente.".format(nome), data)
+          console.send(s,"O vendedor '{}' não existe. Tente novamente.".format(name), data)
       case "/2":
-        nome = data.get("name")
-        if db.has_loja(nome):
-          vendas, total = db.get_total_vendas_loja(nome)
-          console.send(s,"A loja {} teve no total {:d} venda(s), totalizando R$ {:.2f}".format(nome,vendas,total), data)
+        name = data.get("name")
+        if db.has_store(name):
+          sales, total = db.get_total_store_sales(name)
+          console.send(s,"A loja {} teve no total {:d} venda(s), totalizando R$ {:.2f}".format(name, sales, total), data)
         else: 
-          console.send(s,"A loja '{}' não existe. Tente novamente.".format(nome), data)
+          console.send(s,"A loja '{}' não existe. Tente novamente.".format(name), data)
       case "/3":
         min = data.get("min")
         max = data.get("max")
-        vendas, total = db.get_total_vendas_periodo(min, max)
-        message = "O total de vendas da rede de lojas entre o periodo de {} e {} foi de {:d}, totalizando R$ {:.2f}".format(min,max,vendas,total)
+        sales, total = db.get_total_period_salles(min, max)
+        message = "O total de venda(s) da rede de lojas entre o periodo de {} e {} foi de {:d}, totalizando R$ {:.2f}".format(min, max, sales, total)
         console.send(s,message, data)
       case "/4":
-        nome, vendas, total = db.get_melhor_vendedor()
-        message = "O melhor vendedor foi {} com o total de {:d} venda(s), totalizando R$ {:.2f}".format(nome,vendas,total)
+        name, sales, total = db.get_best_seller()
+        message = "O melhor vendedor foi {} com o total de {:d} venda(s), totalizando R$ {:.2f}".format(name, sales, total)
         console.send(s,message, data)
       case "/5":
-        nome, vendas, total = db.get_melhor_loja()
-        message = "A melhor loja foi {} com o total de {:d} venda(s), totalizando R$ {:.2f}".format(nome,vendas,total)
+        name, sales, total = db.get_best_store()
+        message = "A melhor loja foi {} com o total de {:d} venda(s), totalizando R$ {:.2f}".format(name, sales, total)
         console.send(s,message, data)
       case "/7":
         userdata = data.get("userdata")
@@ -261,93 +261,91 @@ class clients:
         except:
           self.remove(client_socket, alias)
 
-class middleware_server:
-    def __init__(self, main_server, temp_server, middleware_server):
+class bridge_server:
+  def __init__(self, main_server, temp_server, bridge_server):
 
-        main_server["socket"] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        temp_server["socket"] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        middleware_server["socket"] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # main server client socket
+    self.ms = main_server
+    self.ms["socket"] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        # main server client socket
-        self.ms = main_server
-        # temp server client socket
-        self.ts = temp_server
-        # middleware server client socket
-        self.mws = middleware_server
+    # temp server client socket
+    self.ts = temp_server
+    self.ts["socket"] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    
+    # bridge server client socket
+    self.bs = bridge_server
+    self.bs["socket"] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    def start(self):
-        host = self.mws["host"]
-        port = self.mws["port"]
+  def start(self):
+    host = self.bs["host"]
+    port = self.bs["port"]
 
-        connection.create_socket(self.mws["socket"], host, port)
-        self.mws["status"] = True
+    connection.create_socket(self.bs["socket"], host, port)
+    self.bs["status"] = True
 
-        threading.Thread(target=self.run).start()
-        threading.Thread(target=self.attempt).start()
+    threading.Thread(target=self.run).start()
+    threading.Thread(target=self.attempt).start()
 
-    def run(self):
-        self.clients = clients()
-        self.clients.accept(
-            self.mws["socket"], on_request=self.response
-        )
+  def run(self):
+    self.clients = clients()
+    self.clients.accept(self.bs["socket"], on_request=self.response)
 
-    # receber as mensagens recebidas do cliente e enviar ao servidor
-    def response(self, code, alias, data, client_socket):
+  # receber as mensagens recebidas do cliente e enviar ao servidor
+  def response(self, code, alias, data, client_socket):
+    data["client_socket"] = alias
+    if self.ms["status"]:
+      console.send(self.ms["socket"], code, data)
+    elif self.ts["status"]:
+      console.send(self.ts["socket"], code, data)
         
-        data["client_socket"] = alias
-        if self.ms["status"]:
-          console.send(self.ms["socket"], code, data)
-        elif self.ts["status"]:
-          console.send(self.ts["socket"], code, data)
-        
-    # receber as mensagens do servidor e enviar ao cliente
-    def receive(self, client_socket):
-        while True:
-          code, data = console.recv(client_socket)
-          if code is None or data is None:
-            continue
-          if "client_socket" in data:
-            console.send(self.clients.get(data["client_socket"]), code)
+  # receber as mensagens do servidor e enviar ao cliente
+  def receive(self, client_socket):
+    while True:
+      code, data = console.recv(client_socket)
+      if code is None or data is None:
+        continue
+      if "client_socket" in data:
+        console.send(self.clients.get(data["client_socket"]), code)
 
-    def attempt(self):
-        connection.attempt(
-            on_success=self.main_server_connect,
-            on_stop=self.temp_server_connect,
-            on_fail_msg="Não foi possível conectar ao servidor principal. Tentando novamente em 5 segundos.",
-            case=not self.ms["status"] and not self.ts["status"],
-            max_attempts=20,
-            delay=5,
-        )
+  # realiza tentativas de conexão com o servidor
+  def attempt(self):
+    connection.attempt(
+      on_success=self.main_server_connect,
+      on_stop=self.temp_server_connect,
+      on_fail_msg="Não foi possível conectar ao servidor principal. Tentando novamente em 5 segundos.",
+      case=not self.ms["status"] and not self.ts["status"],
+      max_attempts=20,
+      delay=5,
+    )
 
-    def main_server_connect(self):
-        self.ms["socket"].connect((self.ms["host"], self.ms["port"]))
-        self.ms["status"] = True
-        print("Conectado ao servidor principal")
+  # conectar ao servidor principal
+  def main_server_connect(self):
+    self.ms["socket"].connect((self.ms["host"], self.ms["port"]))
+    self.ms["status"] = True
+    print("Conectado ao servidor principal")
 
-        client = agent()
-        client.interate(self.ms["socket"], on_send=self.receive)
+    client = agent()
+    client.interate(self.ms["socket"], on_send=self.receive)
 
-        if self.ts["status"]:
-            self.ts["status"] = False
-            self.ts["socket"].close()
+    if self.ts["status"]:
+      self.ts["status"] = False
+      self.ts["socket"].close()
 
-    def temp_server_connect(self):
+  # conectar ao servidor temporário
+  def temp_server_connect(self):
 
-        ts = server(database("src/database.sq3"))
-        ts.init(TEMP_SERVER, message="Servidor temporário escutando em {}:{}")
+    ts = server(database("src/database.sq3"))
+    ts.init(TEMP_SERVER, message="Servidor temporário escutando em {}:{}")
 
-        self.ts["socket"].connect((self.ts["host"], self.ts["port"]))
-        self.ts["status"] = True
-        print("Conectado ao servidor temporário")
+    self.ts["socket"].connect((self.ts["host"], self.ts["port"]))
+    self.ts["status"] = True
+    print("Conectado ao servidor temporário")
 
-        client = agent()
-        client.interate(self.ts["socket"], on_send=self.receive)
+    client = agent()
+    client.interate(self.ts["socket"], on_send=self.receive)
 
-        print("Não foi possível conectar ao servidor principal. Tentando novamente em 7 segundos.")
-
-        server.reconnect(
-            main_server=self.ms, on_success=self.main_server_connect, delay=7
-        )
+    print("Não foi possível conectar ao servidor principal. Tentando novamente em 7 segundos.")
+    server.reconnect(main_server=self.ms, on_success=self.main_server_connect, delay=7)
 
         
 

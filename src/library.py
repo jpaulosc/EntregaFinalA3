@@ -179,27 +179,27 @@ class console():
 class database():
   def __init__(self, name:str):
     self.name = name
-    self.thread_local = threading.local()
 
+  # conectar o banco de dados
   def connect(self):
     self.banco = sqlite3.connect(self.name, check_same_thread=False)
     self.cursor = self.banco.cursor()
 
-  # inserção em massa
+  # inserção em massa de dados
   def bulk_insert(self):
     # tabela de usuarios
     self.cursor.execute("CREATE TABLE IF NOT EXISTS users (id integer PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'seller')")
     # tabela de vendas
     self.cursor.execute("CREATE TABLE IF NOT EXISTS sales (id integer PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, shopname TEXT NOT NULL, date text NOT NULL, price float NOT NULL, FOREIGN KEY (user_id) REFERENCES users(id))")
    
-    # gerente Jess
-    self.add_user('jess', '123', 'Jess', "manager")
-    # vendedor Carl
-    user_id = self.add_user('carl', '123', 'Carl', "seller")
+    # adicionar o gerente Jess
+    self.add_user('jess', '123', 'Jess', role="manager")
+    # adicionar vendedor Carl e algumas vendas
+    user_id = self.add_user('carl', '123', 'Carl', role="seller")
     self.add_sale('americanas', '2023-05-09', 300, user_id)
     self.add_sale('americanas', '2023-05-07', 700, user_id)
-    # vendedor Paul
-    user_id = self.add_user('paul', '123', 'Paul', "seller")
+    # adicionar vendedor Paul e algumas vendas
+    user_id = self.add_user('paul', '123', 'Paul', role="seller")
     self.add_sale('americanas', '2023-05-09', 200, user_id)
     self.add_sale('bompreco', '2023-05-08', 600, user_id)
     
@@ -209,20 +209,22 @@ class database():
     self.cursor.execute(consulta_sql, (username,password))
     return self.cursor.fetchone()
 
-  # obter todos os usuarios
+  # obter o id do usuario pelo nome do usuário
   def get_userid(self, username:str) -> bool:
     self.cursor.execute(f"SELECT id FROM users WHERE username = '{username}'")
     return self.cursor.fetchone()[0]
   
+  # adicionar usuario
   def add_user(self, username:str, password:str, name:str, role:str = "seller") -> int:
     self.cursor.execute(f"INSERT INTO users (username, password, name, role) VALUES ('{username}', '{password}', '{name}', '{role}')")
     return self.cursor.lastrowid
   
+  # adicionar venda
   def add_sale(self, store:str, date:str, price:float, user_id:int):
     self.cursor.execute(f"INSERT INTO sales (user_id, shopname, date, price) VALUES ('{user_id}', '{store}', '{date}', {price})")
     return self.cursor.rowcount > 0
 
-  # limpar tabela
+  # limpar as tabelas de usuários e vendas
   def clear(self):
     if self.has_table('users'):
       self.cursor.execute("DELETE FROM users")
@@ -236,25 +238,25 @@ class database():
     return self.cursor.fetchone() is not None
 
   # total de vendas de uma loja
-  def get_total_vendas_loja(self, shopname:str):
+  def get_total_store_sales(self, shopname:str):
     consulta_sql = "SELECT COUNT(*), SUM(price) FROM sales WHERE shopname = ?"
     self.cursor.execute(consulta_sql, (shopname,))
     return self.cursor.fetchone()
   
   # verificar se loja existe
-  def has_loja(self, name:str) -> bool:
+  def has_store(self, name:str) -> bool:
     consulta_sql = "SELECT 1 FROM sales WHERE shopname = ? LIMIT 1"
     self.cursor.execute(consulta_sql, (name,))
     return self.cursor.fetchone() is not None
   
   # verificar se vendedor existe
-  def has_vendedor(self, username:str) -> bool:
+  def has_seller(self, username:str) -> bool:
     consulta_sql = "SELECT 1 FROM users WHERE username = ? AND role = 'seller' LIMIT 1"
     self.cursor.execute(consulta_sql, (username,))
     return self.cursor.fetchone() is not None
   
   # total de vendas de um vendedor
-  def get_total_vendas_vendedor(self,username:str):
+  def get_total_seller_sales(self,username:str):
     self.cursor.execute("""
         SELECT users.name, COUNT(sales.id) AS total_vendas, SUM(sales.price) AS soma_vendas
         FROM users
@@ -265,13 +267,13 @@ class database():
     return self.cursor.fetchone()
     
   # total de vendas da rede de lojas em um período
-  def get_total_vendas_periodo(self, data_inicial:str, data_final:str):
+  def get_total_period_salles(self, data_inicial:str, data_final:str):
     consulta_sql = "SELECT COUNT(*), SUM(price) FROM sales WHERE date BETWEEN ? AND ?"
     self.cursor.execute(consulta_sql, (data_inicial, data_final))
     return self.cursor.fetchone()
 
   # melhor vendedor (aquele que tem o maior valor acumulado de vendas)
-  def get_melhor_vendedor(self):
+  def get_best_seller(self):
     self.cursor.execute("""
       SELECT users.name, COUNT(*) AS total_count, SUM(sales.price) AS total_vendas
       FROM users
@@ -283,7 +285,7 @@ class database():
     return self.cursor.fetchone()
     
   # melhor loja (aquela que tem o maior valor acumulado de vendas)
-  def get_melhor_loja(self):
+  def get_best_store(self):
     consulta_sql = "SELECT shopname, COUNT(*), SUM(price) as total_vendas FROM sales GROUP BY shopname ORDER BY total_vendas DESC LIMIT 1"
     self.cursor.execute(consulta_sql)
     return self.cursor.fetchone()

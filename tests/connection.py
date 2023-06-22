@@ -1,7 +1,8 @@
 import unittest
 import socket
 from context import *
-from src.utils import MAIN_SERVER, MIDDLEWARE_SERVER
+from server.__main__ import MAIN_SERVER
+from src.core import BRIDGE_SERVER
 from src.library import connection
 
 class TestConnectionMethods(unittest.TestCase):
@@ -12,7 +13,7 @@ class TestConnectionMethods(unittest.TestCase):
 
   def test_mws_connection(self):
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    self.assertTrue(connection.create_socket(server_socket, MIDDLEWARE_SERVER['host'], MIDDLEWARE_SERVER['port']))
+    self.assertTrue(connection.create_socket(server_socket, BRIDGE_SERVER['host'], BRIDGE_SERVER['port']))
 
 if __name__ == '__main__':
   unittest.main()

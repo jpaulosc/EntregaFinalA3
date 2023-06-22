@@ -1,7 +1,6 @@
 # EntregaFinalA3
 
-O projeto em questão é uma aplicação desenvolvida por uma equipe composta por João Paulo, Aleide, Gabriel e Jonatas. Essa aplicação foi criada para auxiliar na gestão de vendas, permitindo que vendedores registrem suas vendas e gerentes consultem as informações registradas.
-
+O projeto em questão é uma aplicação desenvolvida pela equipe composta por Aleide, João Paulo, Gabriel e Jonathas.
 A aplicação foi elaborada utilizando uma interface textual e desenvolvida em Python, aproveitando a versatilidade e facilidade dessa linguagem de programação. 
 
 ## Pré-requisitos

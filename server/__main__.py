@@ -6,7 +6,7 @@ MAIN_SERVER = {
 	"port": 8080,
 	"status": False,
 }
-
+ 
 def ms_init():
   ms = server(database("src/database.sq3"))
   ms.init(MAIN_SERVER, message="Servidor principal escutando em {}:{}")

@@ -1,7 +1,7 @@
 import unittest
 from context import *
 from src.library import database
-
+  
 db = database("src/database.sq3")
 db.connect()
 

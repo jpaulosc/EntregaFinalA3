@@ -34,9 +34,11 @@ class server():
     self.clients = clients()
     self.clients.accept(server_socket,on_sign=self.on_client_connect, on_request=self.resolve)
 
+  # evento de conexão
   def on_client_connect(self, client_socket, alias:str):
-      print(f"O cliente {alias} se conectou ao servidor")
-      
+    print(f"O cliente {alias} se conectou ao servidor")
+
+  # resolver solicitações e enviar respostas
   def resolve(self, code:str, alias:str, data, client_socket):
     s = self.clients.get(data["client_socket"])
     match code:
@@ -84,6 +86,7 @@ class server():
 
 class client:
 
+  # dados do usuarios logado
   USERDATA = None
 
   def request(self, client_socket, auth):
@@ -168,23 +171,20 @@ class agent(client):
                 
     console.print_intro()
     console.print_group()
-
     self.interate(self.s["socket"], authenticate=True)
 
   def interate(self, client_socket, authenticate:bool=False, on_send:Callable = None):
-
     if on_send and callable(on_send):
       receive_thread = threading.Thread(target=on_send, args=(client_socket,))
     else:
       receive_thread = threading.Thread(target=self.response, args=(client_socket,))
     
     send_thread = threading.Thread(target=self.request, args=(client_socket,authenticate,))
-
     receive_thread.start()
     send_thread.start()
 
 class clients:
-
+  
   store = {}
         
   def handle(self, client_socket, alias:str, address:list, on_request:Callable = None):
@@ -334,6 +334,3 @@ class bridge_server:
     print("Não foi possível conectar ao servidor principal. Tentando novamente em 7 segundos.")
     server.reconnect(main_server=self.ms, on_success=self.main_server_connect, delay=7)
 
-        
-
-    

@@ -266,7 +266,7 @@ class database():
         GROUP BY users.name;
     """, (username,))
     return self.cursor.fetchone()
-    
+
   # total de vendas da rede de lojas em um período
   def get_total_period_salles(self, data_inicial:str, data_final:str):
     consulta_sql = "SELECT COUNT(*), SUM(price) FROM sales WHERE date BETWEEN ? AND ?"
@@ -290,4 +290,3 @@ class database():
     consulta_sql = "SELECT store, COUNT(*), SUM(price) as total_vendas FROM sales GROUP BY store ORDER BY total_vendas DESC LIMIT 1"
     self.cursor.execute(consulta_sql)
     return self.cursor.fetchone()
-

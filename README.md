@@ -10,7 +10,7 @@ Para executar o script python, seu sistema deve ter os seguintes programas/pacot
 * Python 3.8
 
 ## Instruções
-  
+
 1. Abra uma janela de terminal no diretório raiz do projeto
 2. Inicie o servidor executando o seguinte comando:
 
